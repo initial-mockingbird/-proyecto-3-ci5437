@@ -16,9 +16,12 @@ val circeVersion = "0.14.1"
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-core",
   "io.circe" %% "circe-generic",
-  "io.circe" %% "circe-parser"
+  "io.circe" %% "circe-parser",
 ).map(_ % circeVersion)
 
 // scalaTest for testing
 libraryDependencies += "org.scalatestplus" %% "scalacheck-1-17" % "3.2.16.0" % "test"
 libraryDependencies += "org.scalatest" %% "scalatest-flatspec" % "3.2.16" % "test"
+
+// iCal4j
+libraryDependencies += "org.mnode.ical4j" % "ical4j" % "4.0.0-beta8"
