@@ -22,3 +22,4 @@ libraryDependencies ++= Seq(
 // scalaTest for testing
 libraryDependencies += "org.scalatestplus" %% "scalacheck-1-17" % "3.2.16.0" % "test"
 libraryDependencies += "org.scalatest" %% "scalatest-flatspec" % "3.2.16" % "test"
+libraryDependencies += "org.typelevel" %% "kittens" % "3.0.0"

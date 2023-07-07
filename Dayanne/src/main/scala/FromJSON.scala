@@ -31,13 +31,6 @@ object FromJSON{
     stripT >>> (it => LocalTime.parse(it,DateTimeFormatter.ISO_TIME)) >>> (s => Try[LocalTime](s))
   }
 
-  case class EntryFormat
-  (tournament_name: String
-   , start_date: LocalDate
-   , end_date: LocalDate
-   , start_time: LocalTime
-   , end_time: LocalTime
-   , participants: Vector[String]
-  )
+  
 }
 

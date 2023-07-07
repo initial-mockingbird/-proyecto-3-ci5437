@@ -1,13 +1,16 @@
 package Delilah
 
+import Delilah.Encodings.EntryFormat
 import org.scalatest.flatspec.AnyFlatSpec
+
 import scala.io.Source
 import cats.arrow.Compose
-import cats.implicits._
-import cats.syntax.all._
+import cats.implicits.*
+import cats.syntax.all.*
 import io.circe.parser.decode
-import Delilah.FromJSON._
-import io.circe.generic.auto._, io.circe.syntax._
+import Delilah.FromJSON.*
+import io.circe.generic.auto.*
+import io.circe.syntax.*
 
 class JsonDecoderSpec extends AnyFlatSpec {
 
