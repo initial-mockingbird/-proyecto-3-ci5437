@@ -5,25 +5,47 @@ import cats.arrow.Compose
 import cats.syntax.all.*
 import cats.derived.*
 
+import scala.annotation.targetName
+
 object Algebra {
-  case class Person(name: String, age: Int)
   /* Boolean Algebra with A-terms */
-  sealed trait Algebra[A] derives Foldable, Functor
-  case class VariableTerm[A](varT : A)   extends Algebra[A]
-  case class Negate[A](neg : Algebra[A]) extends Algebra[A]
-  case class And[A](_1 : Algebra[A], _2 : Algebra[A]) extends Algebra[A]
-  case class Or[A] (_1 : Algebra[A], _2 : Algebra[A]) extends Algebra[A]
-
-  /*
-  implicit val functorAlgebra : Functor[Algebra] = new Functor[Algebra] {
-    def map[A,B](fa: Algebra[A])(f : A => B) : Algebra[B] = fa match
-      case VariableTerm(varT) => VariableTerm(f(varT))
-      case Negate(neg)        => Negate(neg.map(f))
-      case And(_1, _2)        => And(_1.map(f),_2.map(f))
-      case Or(_1, _2)         => Or(_1.map(f),_2.map(f))
+  sealed trait Algebra[A] derives Foldable, Functor{
+    def &(other: Algebra[A]): Algebra[A]
+    def |(other: Algebra[A]): Algebra[A]
+    def unary_~ : Algebra[A]
+    def |>(other : Algebra[A]): Algebra[A]
   }
-  */
+  case class VariableTerm[A](varT : A)   extends Algebra[A]{
+    def &(other: Algebra[A]): Algebra[A] = And(this, other)
+    def |(other: Algebra[A]): Algebra[A] = Or(this, other)
+    def unary_~ : Algebra[A] = Negate(this)
+    def |>(other : Algebra[A]): Algebra[A] = ~this | other
+  }
+  case class Negate[A](neg : Algebra[A]) extends Algebra[A] {
+    def &(other: Algebra[A]): Algebra[A] = And(this, other)
+    def |(other: Algebra[A]): Algebra[A] = Or(this, other)
+    def unary_~ : Algebra[A] = Negate(this)
+    def |>(other : Algebra[A]): Algebra[A] = ~this | other
+  }
+  case class And[A](_1 : Algebra[A], _2 : Algebra[A]) extends Algebra[A] {
+    def &(other: Algebra[A]): Algebra[A] = And(this, other)
+    def |(other: Algebra[A]): Algebra[A] = Or(this, other)
+    def unary_~ : Algebra[A] = Negate(this)
+    def |>(other : Algebra[A]): Algebra[A] = ~this | other
+  }
+  case class Or[A] (_1 : Algebra[A], _2 : Algebra[A]) extends Algebra[A] {
+    def &(other: Algebra[A]): Algebra[A] = And(this, other)
+    def |(other: Algebra[A]): Algebra[A] = Or(this, other)
+    def unary_~ : Algebra[A] = Negate(this)
+    def |>(other : Algebra[A]): Algebra[A] = ~this | other
+  }
 
+  def flatten[A](t : Algebra[Algebra[A]]) : Algebra[A]
+    = t match
+    case And(_1, _2) => And(flatten(_1),flatten(_2))
+    case Or(_1, _2)  => Or(flatten(_1),flatten(_2))
+    case Negate(neg) => Negate(flatten(neg))
+    case VariableTerm(varT) => varT
 
   /* Making it compositional is too much of an overkill for this project */
   def move_negate_inwards[A](term : Algebra[A]) : Algebra[A] =
@@ -82,5 +104,29 @@ object Algebra {
 
   def to_CNF[A](t : Algebra[A]) : Algebra[A] = (move_negate_inwards[A] >>> distribute_and_over_or[A])(t)
 
+  def flatten_CNF_And[A](t: Algebra[A]) : Seq[Algebra[A]]
+    = t match
+    case And(_1, _2) => flatten_CNF_And(_1) ++ flatten_CNF_And(_2)
+    case _   => Seq(t)
+
+  def flatten_CNF_Or[A](t: Algebra[A]): Seq[Algebra[A]]
+  = t match
+    case Or(_1, _2) => flatten_CNF_Or(_1) ++ flatten_CNF_Or(_2)
+    case _ => Seq(t)
+
+  def dinmacs_base_mapper(t : Algebra[Int]) : Int
+    = t match
+    case Negate(neg) => -dinmacs_base_mapper(neg)
+    case VariableTerm(t) => t
+
+  def to_dinmacs(t : Algebra[Int]) : String = {
+    val flatten_ands = flatten_CNF_And(t)
+    val flatten_ors  = flatten_ands.map(it => flatten_CNF_Or(it).map(dinmacs_base_mapper))
+    val xs           = flatten_ors.map(it => it.foldLeft("")((acc,x) => acc + " " + x.toString) + " 0" )
+    val lines = (xs : Seq[String]) => xs.foldLeft("")((acc,b) => acc ++ "\n" ++ b)
+
+    lines(xs)
+
+  }
 
 }

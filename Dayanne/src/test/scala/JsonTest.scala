@@ -20,4 +20,5 @@ class JsonDecoderSpec extends AnyFlatSpec {
     val f = readFile >>> decode[Vector[EntryFormat]] >>> (it => it.isRight)
     assert(f(fp))
   }
+
 }
