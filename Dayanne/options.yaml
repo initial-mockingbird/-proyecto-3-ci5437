@@ -1,0 +1,5 @@
+entryPoint    : ./json_inputs/easy1.json
+glucoseExecutable : cmd.exe /c echo
+glucoseInput  : ./dinmacs/easy1.txt
+glucoseOutput : ./glucose_outputs/easy1.txt.out
+output        : ./outputs/easy1.txt.out

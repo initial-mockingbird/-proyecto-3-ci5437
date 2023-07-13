@@ -17,6 +17,7 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-core",
   "io.circe" %% "circe-generic",
   "io.circe" %% "circe-parser",
+  "io.circe" %% "circe-yaml",
 ).map(_ % circeVersion)
 
 // scalaTest for testing

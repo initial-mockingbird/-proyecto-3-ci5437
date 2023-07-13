@@ -70,28 +70,14 @@ object Algebra {
   /* Assume that term has their negation pushed */
   def distribute_and_over_or[A](term : Algebra[A]) : Algebra[A] =
   term match
-    /* (p ^ q) v r = (p v r) ^ (q v r) */
-    case Or(_1:And[A],_2) => {
-      val p = _1._1
-      val q = _1._2
-      val r = _2
-      val p_or_q = distribute_and_over_or(Or(p,r))
-      val q_or_r = distribute_and_over_or(Or(q,r))
-      return And(p_or_q,q_or_r)
+    case Or(_1, _2) => {
+      val p = distribute_and_over_or(_1)
+      val q = distribute_and_over_or(_2)
+      (p,q) match
+        case (And(_1,_2),_) => distribute_and_over_or(_1 | q) & distribute_and_over_or(_2 | q)
+        case (_,And(_1,_2)) => distribute_and_over_or(p | _1) & distribute_and_over_or(p | _2)
+        case _ => p | q
     }
-    /* r v (p ^ q) = (r v p) ^ (r v q) */
-    case Or(_1, _2 : And[A]) => {
-      val p = _2._1
-      val q = _2._2
-      val r = _1
-      val r_or_p = distribute_and_over_or(Or(r,p))
-      val r_or_q = distribute_and_over_or(Or(r,q))
-      return And(r_or_p,r_or_q)
-    }
-    /* If p and q have their ^/v and p !~ (r1 ^ s1) and q !~ (r2,s2) then p v q have their ^/v
-    * this is easily seen when you think that `distribute_and_over_or` pushes the `v` inside, and pulls the `^` outside
-    * */
-    case Or(_1, _2) => Or(distribute_and_over_or(_1), distribute_and_over_or(_2))
     /* recursive pass through cases */
     /* remember that `distribute_and_over_or` pushes `v` inside... but also pulls `^` outside, so
     * even if we end up having: p ^ q ~ p ^ (r ^ s), we have nothing to push anymore.
@@ -101,6 +87,10 @@ object Algebra {
     case Negate(neg : VariableTerm[A]) => Negate(distribute_and_over_or(neg))
     /*dumb base case*/
     case VariableTerm(_) => term
+    case _ => {
+      println(term)
+      throw new IllegalArgumentException()
+    }
 
   def to_CNF[A](t : Algebra[A]) : Algebra[A] = (move_negate_inwards[A] >>> distribute_and_over_or[A])(t)
 
@@ -119,14 +109,52 @@ object Algebra {
     case Negate(neg) => -dinmacs_base_mapper(neg)
     case VariableTerm(t) => t
 
-  def to_dinmacs(t : Algebra[Int]) : String = {
+  def to_dinmacs_with_count(t : Algebra[Int]) : (Int,String) = {
     val flatten_ands = flatten_CNF_And(t)
     val flatten_ors  = flatten_ands.map(it => flatten_CNF_Or(it).map(dinmacs_base_mapper))
     val xs           = flatten_ors.map(it => it.foldLeft("")((acc,x) => acc + " " + x.toString) + " 0" )
     val lines = (xs : Seq[String]) => xs.foldLeft("")((acc,b) => acc ++ "\n" ++ b)
 
-    lines(xs)
+    (xs.length, lines(xs))
 
+  }
+
+  def to_dinmacs(t: Algebra[Int]): String =  to_dinmacs_with_count(t)._2
+
+  def toPrettyString[A](t : Algebra[A]) : String = {
+    t match
+      case VariableTerm(varT) => varT.toString
+      case Negate(VariableTerm(varT)) => "~" + varT.toString
+      case Negate(Negate(neg)) => "~" + toPrettyString(Negate(neg))
+      case Negate(neg) => "~(" + toPrettyString(neg) + ")"
+      case And(Or(p,q), Or(r,s)) => "(" +  toPrettyString(Or(p,q)) + ")" + " ^ " + "(" +  toPrettyString(Or(r,s)) + ")"
+      case And(Or(p,q), r) => "(" +  toPrettyString(Or(p,q)) + ")" + " ^ " + toPrettyString(r)
+      case And(p, Or(r,s)) => toPrettyString(p)+ " ^ " + "(" +  toPrettyString(Or(r,s)) + ")"
+      case And(p,q) => toPrettyString(p) + " ^ " + toPrettyString(q)
+      case Or(_1, _2) => toPrettyString(_1) + " v " + toPrettyString(_2)
+  }
+
+  def len[A](t: Algebra[A]): Int = {
+    var acc = Seq(t)
+    var l = 0
+    while (acc.length > 0) {
+      val a = acc.head
+      acc = acc.tail
+      a match
+        case And(a, b) => {
+          l += 1; acc = a +: b +: acc
+        }
+        case Or(a, b) => {
+          l += 1; acc = a +: b +: acc
+        }
+        case Negate(a) => {
+          l += 1; acc = a +: acc
+        }
+        case VariableTerm(a) => {
+          l += 1
+        }
+    }
+    l
   }
 
 }

@@ -3,9 +3,9 @@
 {
   "tournament_name": "Champion tournament",
   "start_date": "2005-10-24",
-  "end_date": "2005-10-26",
+  "end_date": "2005-10-30",
   "start_time": "13:00:00",
   "end_time": "17:00:00" ,
-  "participants": ["E1", "E2","E3"]
+  "participants": ["E1", "E2", "E3","E4"]
 }
 
