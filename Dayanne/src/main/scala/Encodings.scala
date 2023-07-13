@@ -82,7 +82,7 @@ def translate_team_encoding(teamEncoding: TeamEncoding) : Algebra[TeamVar]
 * (team * |M|  + day) / |M| % |N| = team % |N| = team
 * */
 def translate_team_var(entryFormat: EntryFormat)(teamVar: TeamVar) : DinMacsVar = {
-  val M = entryFormat.start_date.until(entryFormat.end_date, ChronoUnit.DAYS).toInt
+  val M = entryFormat.start_date.until(entryFormat.end_date, ChronoUnit.DAYS).toInt + 1
   val R = get_number_of_matches_per_day(entryFormat.start_time, entryFormat.end_time)
   val team = teamVar.team
   val day  = teamVar.day
@@ -92,7 +92,7 @@ def translate_team_var(entryFormat: EntryFormat)(teamVar: TeamVar) : DinMacsVar 
 }
 
   def translate_dinmacs_var(entryFormat: EntryFormat)(dinMacsVar: DinMacsVar) : TeamVar = {
-    val M          = entryFormat.start_date.until(entryFormat.end_date, ChronoUnit.DAYS).toInt
+    val M = entryFormat.start_date.until(entryFormat.end_date, ChronoUnit.DAYS).toInt + 1
     val R = get_number_of_matches_per_day(entryFormat.start_time, entryFormat.end_time)
 
     // remember that we get a mapping from (1..), so we move it to (0...)
@@ -126,11 +126,12 @@ def translate_team_var(entryFormat: EntryFormat)(teamVar: TeamVar) : DinMacsVar 
 def choose[A](a : Seq[A], k : Int): Seq[Seq[A]] = {
 
   if (k == 0)      return Seq.empty[Seq[A]]
-  if (k == a.size) return a.map((x : A) => Seq(x))
+  if (k == a.size) return Seq(a)
   if (k > a.size)  throw new IllegalArgumentException("k cannot be larger than the iterable")
 
   val addHead  = choose(a.tail,k-1).map((xs : Seq[A]) => a.head +: xs)
   val skipHead = choose(a.tail,k)
+
 
   addHead ++ skipHead
 }
@@ -146,14 +147,14 @@ def get_number_of_matches_per_day(start_time: LocalTime, end_time: LocalTime) : 
 /* Given a sequence of matchups for the day, construct the correspondent boolean terms. That is, it joins
 * them using `And` (since they ALL have to play that day) */
 def embed_matchups[A](ms : DailyMatchup[A]) : Algebra[Matchup[A]]
-  = ms.tail.foldRight(VariableTerm(ms.head) : Algebra[Matchup[A]])((matchup,ast) => And(VariableTerm(matchup),ast))
+  = ms.drop(1).foldRight(VariableTerm(ms.head) : Algebra[Matchup[A]])((matchup,ast) => ast & VariableTerm(matchup))
 
 /* Given a sequence of all possible matchups, builds up the boolean terms by:
 * - Building the boolean terms for each posible day config
 * - Joining them using an Or (since at least one of them has to be true)
 *  */
 def embed_possible_matchups[A](mss : Seq[DailyMatchup[A]]) : Algebra[Matchup[A]]
-  = mss.tail.foldRight(embed_matchups(mss.head))((matchups,ast) => Or(embed_matchups(matchups),ast) )
+  = mss.drop(1).foldRight(embed_matchups(mss.head))((matchups,ast) => ast | embed_matchups(matchups) )
 
 /* Just an utility function */
 def make_team_encoding(day: Int)(lv: (Int, Int, Int)): TeamEncoding = TeamEncoding(lv._1, lv._2, day, lv._3)
@@ -165,24 +166,25 @@ def generate_matches_for_day(entryFormat: EntryFormat) : Algebra[TeamEncoding] =
     a <- 0 until entryFormat.participants.length
     b <- 0 until entryFormat.participants.length if a != b
   } yield(a,b)
-  val days = 0 until (entryFormat.start_date.until(entryFormat.end_date,ChronoUnit.DAYS).toInt)
+  val days = 0 until entryFormat.start_date.until(entryFormat.end_date,ChronoUnit.DAYS).toInt + 1
   val total_matches  = get_number_of_matches_per_day(entryFormat.start_time,entryFormat.end_time)
   /* We need both (a,b) and (b,a) pairs, so since n choose k just gives us (a,b) we add the swaps manually */
-  val daily_matchups = choose(matchups,total_matches)
+  val daily_matchups = matchups.combinations(total_matches)
     .map(_.zipWithIndex.map(it => (it._1._1,it._1._2,it._2) ))
     .filter(is_naively_legal_matchup)
-    .map(xs => xs ++ xs.map(it => (it._2,it._1,it._3)))
+    .toSeq
+    //.map(xs => xs ++ xs.map(it => (it._2,it._1,it._3)))
   val daily_matchups_ast =  embed_possible_matchups(daily_matchups)
-
+  val aux = toPrettyString(daily_matchups_ast)
   val rs = days.map((d : Int) => daily_matchups_ast.map(make_team_encoding(d)))
 
-  rs.tail.foldLeft(rs.head)((acc,b) => acc & b)
+  rs.drop(1).foldLeft(rs.head)((acc,b) => acc & b)
 
 }
 
 def generate_twice_in_a_row_restriction(entryFormat: EntryFormat) : Algebra[TeamVar] = {
 
-    val days = 0 until (entryFormat.start_date.until(entryFormat.end_date,ChronoUnit.DAYS).toInt) - 1
+    val days = 0 until (entryFormat.start_date.until(entryFormat.end_date,ChronoUnit.DAYS).toInt)  + 1
     val total_matches  = get_number_of_matches_per_day(entryFormat.start_time,entryFormat.end_time)
     val restriction_gen = for {
       day <- days
@@ -195,12 +197,12 @@ def generate_twice_in_a_row_restriction(entryFormat: EntryFormat) : Algebra[Team
       &     (VariableTerm(TeamVar(team,day,matchup_number_today,false)) |> ~VariableTerm(TeamVar(team,day+1,matchup_number_tomorrow,false)))
 
 
-    restriction_gen.tail.foldLeft(restriction_gen.head)((ast,cond) => ast & cond)
+    restriction_gen.drop(1).foldLeft(restriction_gen.head)((ast,cond) => ast & cond)
 }
 
 def generate_match_everybody_restriction(entryFormat: EntryFormat) : Algebra[TeamVar] = {
   val day_upper_limit = entryFormat.start_date.until(entryFormat.end_date, ChronoUnit.DAYS).toInt
-  val days = 0 until day_upper_limit
+  val days = 0 until day_upper_limit + 1
   val total_matches  = get_number_of_matches_per_day(entryFormat.start_time,entryFormat.end_time)
 
   // my brain melted trying to use iterators + for comprehension for this one, and I didnt want to bother
@@ -226,37 +228,38 @@ def generate_match_everybody_restriction(entryFormat: EntryFormat) : Algebra[Tea
     }
     // we need to combine the configurations using `Or`, since it suffices that one is true for two contestants
     // to fight each other as local and then visitor.
-    clauses_seq = acc.tail.foldLeft(acc.head)((acc,clause) => acc | clause) +: clauses_seq
+    clauses_seq = acc.drop(1).foldLeft(acc.head)((acc,clause) => acc | clause) +: clauses_seq
   }
 
   // we link with `And` since we need
-  clauses_seq.tail.foldLeft(clauses_seq.head)((acc,t) => acc & t)
+  clauses_seq.drop(1).foldLeft(clauses_seq.head)((acc,t) => acc & t)
 }
+
 
 
 def to_dinmacs_str(entryFormat: EntryFormat) : String = {
   val trans_team_var = translate_team_var(entryFormat)
 
+  /*
   val matchesP : Algebra[Algebra[DinMacsVar]]
     = generate_matches_for_day(entryFormat)
       .map(translate_team_encoding >>> (it => it.map(trans_team_var)))
   val matches = flatten(matchesP)
-
+  */
   val restriction1 : Algebra[DinMacsVar]
     = generate_twice_in_a_row_restriction(entryFormat).map(trans_team_var)
   /*val restriction2 : Algebra[DinMacsVar]
     = generate_match_everybody_restriction(entryFormat).map(trans_team_var)
   */
-  val formula : Algebra[DinMacsVar] =  restriction1 & to_CNF(matches)
+  val formula : Algebra[DinMacsVar] =  to_CNF(restriction1) //to_CNF(restriction1 & matches & restriction2)
   val formula_cnf = formula//to_CNF(formula)
   val (total_clauses,clauses) = to_dinmacs_with_count(formula_cnf)
   val N = entryFormat.participants.length
   val M = entryFormat.start_date.until(entryFormat.end_date, ChronoUnit.DAYS).toInt
   val R = get_number_of_matches_per_day(entryFormat.start_time, entryFormat.end_time)
-  val total_vars = N * M * R * 2
+  val total_vars = N * (M+1) * R * 2
   "p cnf " + total_vars.toString + " " + total_clauses.toString + " \n" + clauses
 }
 
 }
-
 

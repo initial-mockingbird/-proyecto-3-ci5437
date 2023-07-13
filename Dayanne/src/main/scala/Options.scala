@@ -40,6 +40,7 @@ object Options {
     val dinmacs = to_dinmacs_str(entryFormat)
     glucoseInputW.write(dinmacs)
     glucoseInputW.close()
+    println(options.glucoseExecutable + " " + options.glucoseInput + " " + options.glucoseOutput)
     (options.glucoseExecutable + " " + options.glucoseInput + " " + options.glucoseOutput).!!
     val dinmacsSol = (readFile >>> (it => it.split(" ").dropRight(1).map(s => s.toInt).filter(s => s > 0)))(options.glucoseOutput)
     val calendarSol = translate_team_vars_into_itinerary(entryFormat)(dinmacsSol.map(translate_dinmacs_var(entryFormat)))
